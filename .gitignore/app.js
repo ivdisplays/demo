@@ -1,11 +1,9 @@
-const http = require("http");
-const express = require('express');
-const app = express();
-const mysql      = require('mysql');
-const bodyParser = require('body-parser');
+var express = require('express');
+var exphbs  = require('express-handlebars');
+var mysql = require('mysql');
+var bodyParser = require("body-parser");
 
-//create app server
-const pool = mysql.createPool({
+var pool = mysql.createPool({
     connectionLimit : 100, //focus it
     host : 'localhost',
     user : 'root',
@@ -15,100 +13,154 @@ const pool = mysql.createPool({
     
 });
 
-  pool.getConnection(function(err)
-  {
-    if (err) throw err
-  console.log('You are now connected...')
-})
-//end mysql connection
 
-//start body-parser configuration
-app.use( bodyParser.json() );       // to support JSON-encoded bodies
-app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
-  extended: true
-}));
-//end body-parser configuration
+ 
+var app = express();
+ app.use(bodyParser.urlencoded({ extended: false }));
+app.engine('handlebars', exphbs({defaultLayout: 'main'}));
+app.set('view engine', 'handlebars');
 
-app.listen(3500);
+app.get('/', function(req, res){
+	 //res.send('Inserted Successfully!')
+	    pool.getConnection(function(error,conn){
+
+                 conn.query("SELECT * FROM registration", function (err, result, fields) 
+                  {
+				    if (err) throw err;
+
+				    var dt="";
+				  
+
+                  for(var i=0;i<result.length;i++)
+                  {
+                      dt=dt+"<tr><td>"+result[i].name+"</td><td>"+result[i].email+"</td><td><form action='http://localhost:3000/edit' class='editbutton' method='post'><input type='hidden' name='eid' value='"+result[i].id+"'><button type='submit' class='btn btn-primary'>Edit</button></form><form action='http://localhost:3000/delete' method='post'><input type='hidden' name='did' value='"+result[i].id+"'><button type='submit' class='btn btn-danger'>Delete</button></form></td></tr>";
+                  }
+
+                     res.render('index', { result:dt });
+				  });
+
+
+ 
+
+  conn.release();
+});
+	    
+   });
 
 
 
-//rest api to get all results
-app.get('/registration', function (req, res) 
-{
-   pool.getConnection(function(error,conn)
-   {
-     conn.query("SELECT * FROM registration", function (err, result, fields)
-     {
-        if (err) throw err;
-          res.end(JSON.stringify(result));
-
-      }); 
-
-      conn.release();
-    });
+app.post('/add', function(req, res)
+{          
+  res.render('form', { name:'', email:'',password:'',id:'' });                  
+                     
 });
 
-//rest api to get a single registration data
-app.get('/registration/:id', function (req, res) 
-{
-  pool.getConnection(function(error,conn)
-   {
-     conn.query('select * from registration where id=?', [req.params.id], function (error, results, fields) {
-         if (error) throw error;
-       res.end(JSON.stringify(results));
-      });
 
-      
-    });
-   
-   
+app.post('/edit', function(req, res){
+
+
+  
+	    pool.getConnection(function(error,conn)
+	    {
+
+ var queryString = "SELECT * FROM registration WHERE `id` = '"+req.body.eid+"' " ;
+
+         conn.query(queryString,function(error,result)
+           {
+             if(error)
+               {
+                   throw error;
+               }
+               else
+               {  
+                  for(var i=0;i<result.length;i++)
+                  {                     
+                    res.render('form', { name:result[i].name, email:result[i].email,password:result[i].pwd,id:result[i].id });
+
+                  }
+                                     	
+               }
+            }); 
+
+        });// end of delete
+
 });
 
-//rest api to create a new record into mysql database
-app.post('/registration', function (req, res) {
-   
-
-   pool.getConnection(function(error,conn)
-   {
+app.post('/insert', function(req,res){
+    
+   pool.getConnection(function(error,conn){
 
     email = req.body.email;  
     pwd = req.body.pwd;  
     name = req.body.name;
-
-       var postData  = req.body;
-
-
        
        var queryString = "insert into registration(name,email,pwd) values('"+name+"','"+email+"','"+pwd+"')";
-
-     conn.query(queryString,function (error, results, fields) 
-        {
-          if (error) throw error;
-          res.end(JSON.stringify(results));
-        });
-
-      
-    });
-
-   
+       
+       conn.query(queryString,function(error,results){
+           if(error)
+               {
+                   throw error;
+               }
+           else 
+               {
+                 
+                  res.render('add',{ })
+               }
+           
+       });
+       conn.release();
+   });
+    
+    
 });
 
-/*
+app.post('/update', function(req, res){
+  
+	    pool.getConnection(function(error,conn)
+	    {
 
-//rest api to update record into mysql database
-app.put('/registration', function (req, res) {
-   connection.query('UPDATE `registration` SET `registration_name`=?,`registration_salary`=?,`registration_age`=? where `id`=?', [req.body.registration_name,req.body.registration_salary, req.body.registration_age, req.body.id], function (error, results, fields) {
-	  if (error) throw error;
-	  res.end(JSON.stringify(results));
-	});
-});*/
+	    var queryString = "Update  registration SET name='"+req.body.name+"',email='"+req.body.email+"',pwd='"+req.body.pwd+"' WHERE id = '"+req.body.id+"' " ;
+         conn.query(queryString,function(error,results)
+           {
+             if(error)
+               {
+                   throw error;
+               }
+               else
+               {
+               	  res.render('update', { })
+         
+               	
+               }
+           });    
 
-//rest api to delete record from mysql database
-app.delete('/registration', function (req, res) {
-   console.log(req.body);
-   connection.query('DELETE FROM `registration` WHERE `id`=?', [req.body.id], function (error, results, fields) {
-	  if (error) throw error;
-	  res.end('Record has been deleted!');
-	});
+        });// end of delete
+
 });
+
+
+app.post('/delete', function(req, res){
+  
+	    pool.getConnection(function(error,conn)
+	    {
+
+	    var queryString = "Delete FROM registration WHERE `id` = '"+req.body.did+"' " ;
+         conn.query(queryString,function(error,results)
+           {
+             if(error)
+               {
+                   throw error;
+               }
+               else
+               {
+               	  res.render('delete', { })
+         
+               	
+               }
+           });    
+
+        });// end of delete
+
+});
+
+app.listen(3000);
